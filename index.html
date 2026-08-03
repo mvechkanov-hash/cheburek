@@ -34,8 +34,9 @@
   }
   #stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
   canvas{
-    display:block;width:100%;height:auto;
+    display:block;width:100%;height:100%;
     max-width:100%;max-height:100%;
+    object-fit:contain;
     background:#000;
     image-rendering:pixelated;
     touch-action:none;
@@ -286,6 +287,23 @@ const sfx = {
   tick(){ tone(1050,0.05,"square",0.10); },
   level(){ [262,330,392,523].forEach((f,i)=>tone(f,0.14,"square",0.18,i*0.09)); },
   over(){ [392,330,262,196,131].forEach((f,i)=>tone(f,0.28,"triangle",0.25,i*0.22)); },
+  victory(){
+    tone(NOTE.C5,0.25,"square",0.14,0);
+    tone(NOTE.E5,0.25,"square",0.14,0.18);
+    tone(NOTE.G5,0.25,"square",0.14,0.36);
+    tone(NOTE.C6,0.5,"square",0.2,0.54);
+    tone(NOTE.C5,0.9,"square",0.06,1.1);
+    tone(NOTE.E5,0.9,"square",0.06,1.1);
+    tone(NOTE.G5,0.9,"square",0.06,1.1);
+    tone(NOTE.C6,0.9,"triangle",0.1,1.1);
+    tone(NOTE.E5,0.18,"square",0.12,2.1);
+    tone(NOTE.G5,0.18,"square",0.12,2.28);
+    tone(NOTE.A5,0.18,"square",0.12,2.46);
+    tone(NOTE.G5,0.45,"triangle",0.14,2.64);
+    tone(NOTE.C6,0.7,"triangle",0.16,3.1);
+    tone(NOTE.E6,0.35,"sine",0.1,3.5);
+    tone(NOTE.G6,0.55,"sine",0.12,3.7);
+  },
 };
 
 /* ---------- ФОНОВАЯ МУЗЫКА: оригинальный чиптюн в духе платформеров 90-х ---------- */
@@ -362,6 +380,7 @@ const game = {
   flash: 0, flashText: "",  // заставка "УРОВЕНЬ N"
   shake: 0,
   megaPause: 0,
+  victory: false, victoryT: 0,
 };
 const segH = () => (CHEB.h - CHEB.gap*(CHEB.seg-1)) / CHEB.seg;
 const headSpeed = lvl => (1.4 + (lvl-1)*0.55) * (PORTRAIT ? H/600 : 1.1);
@@ -694,6 +713,13 @@ function makeBites(idx){                       // рваный край на м�
   game.bites = { idx, arcs };
 }
 function newLevel(first){
+  // защита: если уровень > 10 — победа
+  if(game.level > 10){
+    game.victory = true; game.victoryT = 0; game.parts = [];
+    stopMusic(); sfx.victory();
+    if(game.score > P.best) P.best = game.score; saveP();
+    return;
+  }
   game.segLeft = CHEB.seg;
   game.levelSpeed = headSpeed(game.level);              // фиксируем скорость на весь уровень
   buildFood();                                        // блюдо уровня задаёт и габариты
@@ -708,6 +734,7 @@ function newLevel(first){
 function startGame(){
   startMusic();
   game.level = 1; game.score = 0; game.lives = 3; game.megaLives = 3; game.megaPause = 0;
+  game.victory = false; game.victoryT = 0;
   game.parts = []; game.floats = [];
   newLevel(true);
   show("play");
@@ -801,11 +828,15 @@ document.getElementById("btnMenu").onclick = () => { stopMusic(); show("menu"); 
 addEventListener("keydown", e => {
   if(e.code==="Space" || e.code==="ArrowRight"){
     e.preventDefault();
-    if(state==="play") fire();
+    if(state==="play"){
+      if(game.victory){
+        if(game.victoryT >= 300){ game.victory=false; show("menu"); startMenuMusic(); }
+      }else fire();
+    }
   }
   if(state==="menu" && e.code==="Enter"){ audio(); startGame(); }
 });
-cvs.addEventListener("pointerdown", e => { e.preventDefault(); if(state==="play") fire(); });
+cvs.addEventListener("pointerdown", e => { e.preventDefault(); if(state==="play"){ if(game.victory){ if(game.victoryT>=300){ game.victory=false; show("menu"); startMenuMusic(); } }else{ fire(); } } });
 cvs.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("contextmenu", e => e.preventDefault());
 function goFullscreen(){
@@ -826,6 +857,7 @@ function fire(){
     x: CHEB.x,
     y: game.chebY + idx*(segH()+CHEB.gap),
     rot: 0,
+    age: 0,
   };
   game.segLeft--;
   sfx.shoot();
@@ -862,6 +894,16 @@ function resolveShot(hit){
 }
 function advance(){                        // следующая цель или следующий уровень
   if(game.segLeft<=0){
+    if(game.level >= 10){
+      game.victory = true;
+      game.victoryT = 0;
+      game.parts = [];
+      stopMusic();
+      sfx.victory();
+      if(game.score > P.best) P.best = game.score;
+      saveP();
+      return;
+    }
     game.level++;
     newLevel(false);
   }else{
@@ -914,6 +956,25 @@ function burst(x,y,n){
 function update(){
   if(game.flash>0) game.flash--;
   if(game.shake>0) game.shake--;
+
+  // победный экран
+  if(game.victory){
+    game.victoryT++;
+    // конфетти
+    if(game.victoryT % 6 === 0 && game.victoryT < 400){
+      const cols = ["#ffc04d","#22c55e","#e8912d","#d43a10","#fff","#e8b30b"];
+      for(let i=0;i<4;i++){
+        game.parts.push({
+          x: Math.random()*W, y: -10,
+          vx: (Math.random()-0.5)*4, vy: 1.5+Math.random()*2.5,
+          t: 140+Math.random()*80, r: 3+Math.random()*5,
+          color: cols[Math.floor(Math.random()*cols.length)]
+        });
+      }
+    }
+    game.parts = game.parts.filter(p => (p.t--, p.x+=p.vx, p.y+=p.vy, p.vy+=0.04, p.t>0));
+    return;
+  }
 
   // пауза при потере мегажизни
   if(game.megaPause > 0){
@@ -969,21 +1030,133 @@ function update(){
   if(game.shot){
     game.shot.x += 15;
     game.shot.rot += 0.25;
+    game.shot.age++;
     const h = game.head;
-    const front = game.shot.x + CHEB.w;         // передний край куска
-    const cy = game.shot.y + segH()/2;
-    if(h && h.alive){
-      const dx = (game.shot.x + CHEB.w/2) - h.x;
-      const dy = cy - h.y;
-      const hc = headCfg();                      // толстяки — цель шире
-      if(Math.abs(dx) < (50 + hc.fat*22)*PSCALE && Math.abs(dy) < (42 + hc.fat*16)*PSCALE){ resolveShot(true); }
+    // проверка попадания/промаха только после минимального полёта (8 кадров)
+    if(game.shot.age >= 8){
+      const front = game.shot.x + CHEB.w;         // передний край куска
+      const cy = game.shot.y + segH()/2;
+      if(h && h.alive){
+        const dx = (game.shot.x + CHEB.w/2) - h.x;
+        const dy = cy - h.y;
+        const hc = headCfg();                      // толстяки — цель шире
+        if(Math.abs(dx) < (50 + hc.fat*22)*PSCALE && Math.abs(dy) < (42 + hc.fat*16)*PSCALE){ resolveShot(true); }
+      }
+      if(game.shot && front > W+40){ resolveShot(false); }
     }
-    if(game.shot && front > W+40){ resolveShot(false); }
   }
 
   // частицы и надписи
   game.parts = game.parts.filter(p => (p.t--, p.x+=p.vx, p.y+=p.vy, p.vy+=0.25, p.t>0));
   game.floats = game.floats.filter(f => (f.t--, f.y-=1.2, f.t>0));
+}
+
+/* ============================== ПОБЕДНЫЙ ЭКРАН ============================== */
+function drawVictoryFace(cx, cy, sc){
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(sc, sc);
+  // лицо
+  const fg = ctx.createRadialGradient(-6,-14,12, 0,0,62);
+  fg.addColorStop(0, "#f6c078"); fg.addColorStop(0.75, "#f2b46e"); fg.addColorStop(1, "#b07430");
+  ctx.beginPath(); ctx.ellipse(0, 0, 55, 65, 0, 0, 7);
+  ctx.fillStyle = fg; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "#8a5017"; ctx.stroke();
+  // волосы (чёлка как у 1-го уровня)
+  ctx.strokeStyle = "#4a2c10"; ctx.lineWidth = 4; ctx.lineCap = "round";
+  for(let i=0;i<4;i++){ ctx.beginPath();
+    ctx.moveTo(-34+i*4, -40+i*2); ctx.quadraticCurveTo(6, -56+i*3, 42-i*3, -34+i*2); ctx.stroke(); }
+  // ухо
+  ctx.beginPath(); ctx.ellipse(50, 6, 9, 13, -0.2, 0, 7);
+  ctx.fillStyle = "#f2b46e"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = "#8a5017"; ctx.stroke();
+  // румянец
+  ctx.fillStyle = "rgba(220,90,40,0.35)";
+  ctx.beginPath(); ctx.ellipse(-28, 18, 14, 10, 0.3, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(32, 20, 13, 9, -0.3, 0, 7); ctx.fill();
+  // глаза — довольные дуги
+  ctx.strokeStyle = "#1c0d02"; ctx.lineWidth = 3.5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(-20, -14, 9, Math.PI*0.15, Math.PI*0.85); ctx.stroke();
+  ctx.beginPath(); ctx.arc(10, -16, 8, Math.PI*0.15, Math.PI*0.85); ctx.stroke();
+  // брови — радостно подняты
+  ctx.strokeStyle = "#4a2c10"; ctx.lineWidth = 3.5;
+  ctx.beginPath(); ctx.moveTo(-32, -30); ctx.lineTo(-10, -28); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(22, -31); ctx.lineTo(4, -29); ctx.stroke();
+  // нос
+  ctx.beginPath(); ctx.ellipse(-4, 4, 10, 7, 0, 0, 7);
+  ctx.fillStyle = "#f2b46e"; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#8a5017"; ctx.stroke();
+  ctx.fillStyle = "#6b3c10";
+  ctx.beginPath(); ctx.arc(-9, 7, 1.7, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(1, 7, 1.7, 0, 7); ctx.fill();
+  // усы
+  ctx.strokeStyle = "#3a2410"; ctx.lineWidth = 4.5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(-3, 10); ctx.quadraticCurveTo(-20, 6, -32, 14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-3, 10); ctx.quadraticCurveTo(8, 7, 18, 14); ctx.stroke();
+  // большая улыбка!
+  ctx.beginPath();
+  ctx.moveTo(-38, 18);
+  ctx.quadraticCurveTo(0, 58, 38, 18);
+  ctx.quadraticCurveTo(0, 48, -38, 18);
+  ctx.fillStyle = "#3a0b02"; ctx.fill();
+  // зубы верхний ряд
+  ctx.fillStyle = "#f7e7c3";
+  for(let i=0;i<5;i++) ctx.fillRect(-30+i*13, 18, 10, 7);
+  // зубы нижний ряд
+   for(let i=0;i<4;i++) ctx.fillRect(-24+i*13, 32, 10, 7);
+  // язык
+  ctx.fillStyle = "#c0392b";
+  ctx.beginPath(); ctx.ellipse(0, 46, 14, 8, 0, 0, Math.PI); ctx.fill();
+  ctx.restore();
+}
+function drawVictory(){
+  const t = game.victoryT;
+  // фон
+  ctx.fillStyle = "rgba(0,0,0,.92)";
+  ctx.fillRect(-20,-20,W+40,H+40);
+  // конфетти
+  for(const p of game.parts){
+    ctx.fillStyle = p.color || "#ffc04d";
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.t*0.08);
+    ctx.fillRect(-p.r/2, -p.r/2, p.r, p.r);
+    ctx.restore();
+  }
+  // "ПОБЕДА!" — появление
+  const fadeIn = Math.min(1, t/40);
+  ctx.save(); ctx.globalAlpha = fadeIn; ctx.textAlign = "center";
+  // свечение текста
+  ctx.shadowColor = "#ffc04d"; ctx.shadowBlur = 30;
+  ctx.fillStyle = "#ffc04d";
+  const ts = Math.min(80, W*0.085);
+  ctx.font = "bold " + ts + "px Impact, sans-serif";
+  ctx.fillText("ПОБЕДА!", W/2, H*0.16);
+  ctx.shadowBlur = 0;
+  // "Я НАЕЛСЯ"
+  ctx.fillStyle = "#22c55e";
+  ctx.shadowColor = "#22c55e"; ctx.shadowBlur = 20;
+  const ss = Math.min(64, W*0.068);
+  ctx.font = "bold " + ss + "px Impact, sans-serif";
+  ctx.fillText("Я НАЕЛСЯ", W/2, H*0.84);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+  // лицо — 1/3 экрана, покачивание
+  const faceSize = Math.min(W, H) / 3;
+  const sc = faceSize / 130;
+  const bob = Math.sin(t * 0.04) * 8;
+  drawVictoryFace(W/2, H/2 + bob, sc);
+  // очки
+  ctx.save(); ctx.globalAlpha = fadeIn; ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,192,77,.7)";
+  ctx.font = "bold " + (PORTRAIT?32:22) + "px 'Courier New', monospace";
+  ctx.fillText("ОЧКИ: " + game.score, W/2, H*0.84 + (PORTRAIT?50:36));
+  // подсказка — тапните для выхода (только после 5 секунд)
+  if(game.victoryT >= 300){
+    const blink = Math.sin(t*0.06) > 0;
+    if(blink){
+      ctx.fillStyle = "rgba(232,145,45,.5)";
+      ctx.font = "bold " + (PORTRAIT?24:18) + "px 'Courier New', monospace";
+      ctx.fillText(IS_TOUCH ? "ТАПНИТЕ ДЛЯ ВЫХОДА В МЕНЮ" : "НАЖМИТЕ ДЛЯ ВЫХОДА В МЕНЮ", W/2, H*0.93);
+    }
+  }
+  ctx.restore();
 }
 
 /* ============================== ОТРИСОВКА ============================== */
@@ -1209,7 +1382,8 @@ function drawHUD(){
   ctx.fillText("БЛЮДО: " + foodCfg().name, W/2 - 190, hudY + hudGap);
   ctx.fillStyle = "#e8912d";
   ctx.font = "bold " + hudFs + "px Impact, sans-serif";
-  ctx.fillText("УРОВЕНЬ: " + game.level, W/2 + 190, hudY);
+  const levelX = PORTRAIT ? W/2 + 190 : W/2 + 300;
+  ctx.fillText("УРОВЕНЬ: " + game.level, levelX, hudY);
   // таймер уровня
   const sec = Math.max(0, Math.ceil(game.timeLeft/60));
   const blink = sec<=10 && (game.timeLeft%40<20);
@@ -1220,9 +1394,10 @@ function drawHUD(){
   const heartScale = PORTRAIT ? 1.5 : 1;
   const heartY = PORTRAIT ? hudY + hudGap + 80 : hudY - 18;
   const s = heartScale;
+  const hCenter = PORTRAIT ? W/2 : W/2 - 30;
   const hSp = Math.round(38 * s);
   for(let i=0;i<3;i++){
-    const hx = W/2 - hSp + i*hSp, hy = heartY, on = i < game.lives;
+    const hx = hCenter - hSp + i*hSp, hy = heartY, on = i < game.lives;
     ctx.fillStyle = on ? "#d43a10" : "#3a3a3a";
     ctx.fillRect(hx, hy, 8*s, 8*s); ctx.fillRect(hx+12*s, hy, 8*s, 8*s);
     ctx.fillRect(hx-2*s, hy+6*s, 24*s, 8*s); ctx.fillRect(hx+2*s, hy+14*s, 16*s, 6*s);
@@ -1231,7 +1406,7 @@ function drawHUD(){
   // мегажизни — зелёные кружки (рядом с сердечками)
   const megaR = Math.round(12 * s);
   const mSp = megaR * 2 + Math.round(10 * s);
-  const mX0 = W/2 + hSp + Math.round(22 * s) + Math.round(12 * s);
+  const mX0 = hCenter + hSp + Math.round(22 * s) + Math.round(12 * s);
   for(let i=0;i<3;i++){
     const cx = mX0 + megaR + i*mSp, cy = heartY + megaR;
     const on = i < game.megaLives;
@@ -1272,6 +1447,12 @@ function draw(){
     ctx.fillText(f.text, f.x, f.y);
   }
   drawHUD();
+  // победный экран
+  if(game.victory){
+    drawVictory();
+    ctx.restore();
+    return;
+  }
   // пауза мегажизни
   if(game.megaPause > 0){
     ctx.fillStyle = "rgba(0,0,0,.82)";
