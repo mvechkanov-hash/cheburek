@@ -32,9 +32,10 @@
     position:fixed;inset:0;pointer-events:none;z-index:49;
     background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%);
   }
-  #stage{position:relative;width:100%;height:100%}
+  #stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
   canvas{
-    display:block;width:100%;height:100%;
+    display:block;width:100%;height:auto;
+    max-width:100%;max-height:100%;
     background:#000;
     image-rendering:pixelated;
     touch-action:none;
@@ -115,8 +116,8 @@
     /* ---- мобильные экраны: оверлеи на весь телефон, кегли меньше ---- */
   #rotateHint{display:none}
   @media (max-width: 700px){
-    #stage{width:100vw;height:100vh;height:100svh;overflow:hidden}
-    #stage canvas{width:100vw;height:100vh;height:100svh}
+    #stage{width:100vw;height:100vh;height:100svh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    #stage canvas{width:100vw;height:auto}
     .screen{position:absolute;inset:0;gap:16px;overflow-y:auto;padding:20px 0}
     h1.logo{letter-spacing:3px}
     .btn{font-size:30px}
@@ -203,6 +204,13 @@ CHEB_SPRITE.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKMAAAGQCAYAAAD
 /* ============================== БАЗА ============================== */
 const cvs = document.getElementById("game");
 const ctx = cvs.getContext("2d");
+/* В портретном режиме на телефоне — растягиваем canvas по высоте экрана,
+   чтобы голова летела на весь экран, но без искажения спрайтов */
+const PORTRAIT = window.innerWidth < 700 && window.innerWidth < window.innerHeight;
+const PSCALE = PORTRAIT ? 1.8 : 1;  // масштаб спрайтов в портретном режиме
+if(PORTRAIT){
+  cvs.height = Math.round(cvs.width * (window.innerHeight / window.innerWidth));
+}
 const W = cvs.width, H = cvs.height;
 
 /* ---- профиль игрока: рекорд, копилка, скины (localStorage) ---- */
@@ -345,7 +353,7 @@ const game = {
   megaPause: 0,
 };
 const segH = () => (CHEB.h - CHEB.gap*(CHEB.seg-1)) / CHEB.seg;
-const headSpeed = lvl => 1.4 + (lvl-1)*0.55;
+const headSpeed = lvl => (1.4 + (lvl-1)*0.55) * (PORTRAIT ? H/600 : 1);
 
 function newHead(){
   game.head = { x: W-110, y: -70, spd: headSpeed(game.level), alive: true, chomp: 0,
@@ -677,7 +685,7 @@ function makeBites(idx){                       // рваный край на м�
 function newLevel(first){
   game.segLeft = CHEB.seg;
   buildFood();                                        // блюдо уровня задаёт и габариты
-  game.chebY = 70 + Math.random()*(H - CHEB.h - 140);
+  game.chebY = Math.round(H*0.75) + Math.random()*Math.max(0, H - CHEB.h - Math.round(H*0.75));
   newHead();
   game.shot = null;
   game.timeLeft = 3600;                               // свежая минута на каждый уровень
@@ -866,7 +874,7 @@ document.getElementById("btnMega").onclick = () => {
   game.shot = null;
   game.parts = []; game.floats = [];
   buildFood();
-  game.chebY = 70 + Math.random()*(H - CHEB.h - 140);
+  game.chebY = Math.round(H*0.75) + Math.random()*Math.max(0, H - CHEB.h - Math.round(H*0.75));
   newHead();
   game.timeLeft = 3600;
   game.flash = 90;
@@ -896,7 +904,7 @@ function update(){
       game.bites = null;
       game.shot = null;
       buildFood();
-      game.chebY = 70 + Math.random()*(H - CHEB.h - 140);
+      game.chebY = Math.round(H*0.75) + Math.random()*Math.max(0, H - CHEB.h - Math.round(H*0.75));
       newHead();
       game.timeLeft = 3600;
       game.flash = 90;
@@ -948,7 +956,7 @@ function update(){
       const dx = (game.shot.x + CHEB.w/2) - h.x;
       const dy = cy - h.y;
       const hc = headCfg();                      // толстяки — цель шире
-      if(Math.abs(dx) < 50 + hc.fat*22 && Math.abs(dy) < 42 + hc.fat*16){ resolveShot(true); }
+      if(Math.abs(dx) < (50 + hc.fat*22)*PSCALE && Math.abs(dy) < (42 + hc.fat*16)*PSCALE){ resolveShot(true); }
     }
     if(game.shot && front > W+40){ resolveShot(false); }
   }
@@ -965,6 +973,7 @@ function drawSegment(idx, x, y, rot){
   const fc = game.food && game.food.canvas;
   ctx.save();
   ctx.translate(x + CHEB.w/2, y + sh/2);
+  if(PSCALE!==1) ctx.scale(PSCALE, PSCALE);
   if(rot) ctx.rotate(rot);
   ctx.shadowColor = "rgba(255,170,60,.35)";
   ctx.shadowBlur = 14;
@@ -1022,6 +1031,7 @@ function drawHead(){
   const fy = 1 + cfg.fat*0.12;
   ctx.save();
   ctx.translate(h.x, h.y);
+  if(PSCALE!==1) ctx.scale(PSCALE, PSCALE);
   if(chewing && h.chewT<10) ctx.globalAlpha = h.chewT/10;
   // шея и воротник (у злодея — с шипами)
   ctx.fillStyle = cfg.skin;
@@ -1169,42 +1179,53 @@ function drawHead(){
 function drawHUD(){
   ctx.textAlign = "center";
   ctx.fillStyle = "#e8912d";
-  ctx.font = "bold 30px Impact, sans-serif";
-  ctx.fillText("ОЧКИ: " + game.score, W/2 - 190, 40);
-  ctx.font = "bold 16px 'Courier New', monospace";
+  const hudY = PORTRAIT ? 36 : 40;
+  const hudFs = PORTRAIT ? 46 : 30;
+  const hudGap = PORTRAIT ? 52 : 18;
+  ctx.font = "bold " + hudFs + "px Impact, sans-serif";
+  ctx.fillText("ОЧКИ: " + game.score, W/2 - 190, hudY);
   ctx.fillStyle = "rgba(255,192,77,.75)";
-  ctx.fillText("БЛЮДО: " + foodCfg().name, W/2 - 190, 62);
-  ctx.font = "bold 30px Impact, sans-serif";
+  ctx.font = "bold " + (PORTRAIT?28:16) + "px 'Courier New', monospace";
+  ctx.fillText("БЛЮДО: " + foodCfg().name, W/2 - 190, hudY + hudGap);
   ctx.fillStyle = "#e8912d";
-  ctx.fillText("УРОВЕНЬ: " + game.level, W/2 + 190, 40);
+  ctx.font = "bold " + hudFs + "px Impact, sans-serif";
+  ctx.fillText("УРОВЕНЬ: " + game.level, W/2 + 190, hudY);
   // таймер уровня
   const sec = Math.max(0, Math.ceil(game.timeLeft/60));
   const blink = sec<=10 && (game.timeLeft%40<20);
   ctx.fillStyle = sec<=10 ? (blink ? "#ff2200" : "#d43a10") : "#ffc04d";
-  ctx.font = "bold 26px Impact, sans-serif";
-  ctx.fillText("ВРЕМЯ: 0:" + String(sec).padStart(2,"0"), W/2, 74);
+  ctx.font = "bold " + (PORTRAIT?40:26) + "px Impact, sans-serif";
+  ctx.fillText("ВРЕМЯ: 0:" + String(sec).padStart(2,"0"), W/2, hudY + hudGap + 40);
   // жизни — пиксельные сердца
+  const heartScale = PORTRAIT ? 1.5 : 1;
+  const heartY = PORTRAIT ? hudY + hudGap + 80 : hudY - 18;
   for(let i=0;i<3;i++){
-    const x = W/2 - 34 + i*34, y = 22, on = i < game.lives;
+    const hx = W/2 - 34 + i*34, hy = heartY, on = i < game.lives;
+    const s = heartScale;
     ctx.fillStyle = on ? "#d43a10" : "#3a3a3a";
-    ctx.fillRect(x, y, 8, 8); ctx.fillRect(x+12, y, 8, 8);
-    ctx.fillRect(x-2, y+6, 24, 8); ctx.fillRect(x+2, y+14, 16, 6);
-    ctx.fillRect(x+6, y+20, 8, 4);
+    ctx.fillRect(hx, hy, 8*s, 8*s); ctx.fillRect(hx+12*s, hy, 8*s, 8*s);
+    ctx.fillRect(hx-2*s, hy+6*s, 24*s, 8*s); ctx.fillRect(hx+2*s, hy+14*s, 16*s, 6*s);
+    ctx.fillRect(hx+6*s, hy+20*s, 8*s, 4*s);
   }
-  // мегажизни — звёзды
+  // мегажизни — звёзды (правый верхний угол, под уровнем)
   ctx.fillStyle = "#e8b30b";
-  ctx.font = "bold 12px 'Courier New', monospace";
-  ctx.textAlign = "left";
-  ctx.fillText("МЕГА:", W/2 - 34, 72);
+  ctx.font = "bold " + (PORTRAIT?28:14) + "px 'Courier New', monospace";
+  ctx.textAlign = "right";
+  ctx.fillText("МЕГА:", W - 16, hudY + hudGap);
   for(let i=0;i<3;i++){
-    const mx = W/2 + 20 + i*22, my = 60, on = i < game.megaLives;
+    const mx = W - 76 + i*22, my = hudY + hudGap - 12, on = i < game.megaLives;
     ctx.fillStyle = on ? "#e8b30b" : "#2a2a2a";
+    const ss = PORTRAIT ? 1.6 : 1;
+    ctx.save();
+    ctx.translate(mx+6, my+7); ctx.scale(ss, ss);
     ctx.beginPath();
-    ctx.moveTo(mx+6, my); ctx.lineTo(mx+8, my+5); ctx.lineTo(mx+13, my+5);
-    ctx.lineTo(mx+9, my+8); ctx.lineTo(mx+11, my+14); ctx.lineTo(mx+6, my+10);
-    ctx.lineTo(mx+1, my+14); ctx.lineTo(mx+3, my+8); ctx.lineTo(mx-1, my+5);
-    ctx.lineTo(mx+4, my+5); ctx.closePath(); ctx.fill();
+    ctx.moveTo(0, -7); ctx.lineTo(2, -2); ctx.lineTo(7, -2);
+    ctx.lineTo(3, 1); ctx.lineTo(5, 7); ctx.lineTo(0, 3);
+    ctx.lineTo(-5, 7); ctx.lineTo(-3, 1); ctx.lineTo(-7, -2);
+    ctx.lineTo(-2, -2); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
+  ctx.textAlign = "center";
   // подсказка на первом уровне
   if(game.level===1 && game.score===0 && game.lives===3){
     ctx.fillStyle = "rgba(232,145,45,.6)";
