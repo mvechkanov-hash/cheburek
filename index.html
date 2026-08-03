@@ -45,7 +45,9 @@
     position:absolute;inset:0;z-index:10;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:26px;text-align:center;background:#000;
+    touch-action:manipulation;
   }
+  .btn{touch-action:manipulation}
   .hidden{display:none}
   h1.logo{
     font-size:clamp(64px,14vw,150px);
@@ -716,7 +718,7 @@ document.getElementById("menuStats").textContent =
     "РЕКОРД: " + P.best + " · В КОПИЛКЕ: " + P.bank + " ОЧК.";
 document.getElementById("menuCheb").src = CHEB_SPRITE.src;
 document.getElementById("menuCheb2").src = CHEB_SPRITE.src;
-document.getElementById("btnPlay").onclick = () => { audio(); stopMenuMusic(); startGame(); };
+document.getElementById("btnPlay").onclick = () => { audio(); stopMenuMusic(); goFullscreen(); startGame(); };
 addEventListener("keydown", e => {
   if(e.code==="KeyM"){
     musicMuted = !musicMuted;
@@ -796,6 +798,14 @@ addEventListener("keydown", e => {
 });
 cvs.addEventListener("pointerdown", e => { e.preventDefault(); if(state==="play") fire(); });
 cvs.addEventListener("contextmenu", e => e.preventDefault());
+document.addEventListener("contextmenu", e => e.preventDefault());
+function goFullscreen(){
+  try{
+    const el = document.documentElement;
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if(fn) fn.call(el);
+  }catch(e){}
+}
 const IS_TOUCH = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 
 function fire(){
