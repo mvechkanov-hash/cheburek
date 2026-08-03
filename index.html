@@ -148,7 +148,7 @@
     <img class="menu-cheb" id="menuCheb" alt="">
     <img class="menu-cheb right" id="menuCheb2" alt="">
     <h1 class="logo">ЧебурЭк</h1>
-    <div class="subtitle">СНАЧАЛА ПАЭЩЬ, БРАТАН</div>
+    <div class="subtitle"></div>
     <div class="stats-line" id="menuStats"></div>
     <button class="btn" id="btnPlay" onclick="try{audio();stopMenuMusic();startGame();}catch(e){startGame();}">ИГРАТЬ</button>
     <button class="btn" id="btnHelp" onclick="show('help')">ИНСТРУКЦИЯ</button>
@@ -191,7 +191,7 @@
 
 
 </div>
-<div id="rotateHint">↻ ПОВЕРНИ ТЕЛЕФОН ГОРИЗОНТАЛЬНО — ТАК УДОБНЕЕ</div>
+
 <div id="vignette"></div>
 <div id="crt"></div>
 
@@ -356,7 +356,7 @@ const segH = () => (CHEB.h - CHEB.gap*(CHEB.seg-1)) / CHEB.seg;
 const headSpeed = lvl => (1.4 + (lvl-1)*0.55) * (PORTRAIT ? H/600 : 1);
 
 function newHead(){
-  game.head = { x: W-110, y: -70, spd: headSpeed(game.level), alive: true, chomp: 0,
+  game.head = { x: W-110, y: -70, spd: game.levelSpeed, alive: true, chomp: 0,
                 mode: "fall", chewT: 0 };
 }
 /* ================= БЛЮДА ПО УРОВНЯМ ================= */
@@ -684,8 +684,9 @@ function makeBites(idx){                       // рваный край на м�
 }
 function newLevel(first){
   game.segLeft = CHEB.seg;
+  game.levelSpeed = headSpeed(game.level);              // фиксируем скорость на весь уровень
   buildFood();                                        // блюдо уровня задаёт и габариты
-  game.chebY = Math.round(H*0.75) + Math.random()*Math.max(0, H - CHEB.h - Math.round(H*0.75));
+  game.chebY = Math.round(H*0.3) + Math.random()*Math.max(0, Math.min(Math.round(H*0.8), H - CHEB.h) - Math.round(H*0.3));
   newHead();
   game.shot = null;
   game.timeLeft = 3600;                               // свежая минута на каждый уровень
@@ -874,7 +875,7 @@ document.getElementById("btnMega").onclick = () => {
   game.shot = null;
   game.parts = []; game.floats = [];
   buildFood();
-  game.chebY = Math.round(H*0.75) + Math.random()*Math.max(0, H - CHEB.h - Math.round(H*0.75));
+  game.chebY = Math.round(H*0.3) + Math.random()*Math.max(0, Math.min(Math.round(H*0.8), H - CHEB.h) - Math.round(H*0.3));
   newHead();
   game.timeLeft = 3600;
   game.flash = 90;
@@ -904,7 +905,7 @@ function update(){
       game.bites = null;
       game.shot = null;
       buildFood();
-      game.chebY = Math.round(H*0.75) + Math.random()*Math.max(0, H - CHEB.h - Math.round(H*0.75));
+      game.chebY = Math.round(H*0.3) + Math.random()*Math.max(0, Math.min(Math.round(H*0.8), H - CHEB.h) - Math.round(H*0.3));
       newHead();
       game.timeLeft = 3600;
       game.flash = 90;
@@ -1207,23 +1208,20 @@ function drawHUD(){
     ctx.fillRect(hx-2*s, hy+6*s, 24*s, 8*s); ctx.fillRect(hx+2*s, hy+14*s, 16*s, 6*s);
     ctx.fillRect(hx+6*s, hy+20*s, 8*s, 4*s);
   }
-  // мегажизни — звёзды (правый верхний угол, под уровнем)
-  ctx.fillStyle = "#e8b30b";
-  ctx.font = "bold " + (PORTRAIT?28:14) + "px 'Courier New', monospace";
-  ctx.textAlign = "right";
-  ctx.fillText("МЕГА:", W - 16, hudY + hudGap);
+  // мегажизни — зелёные кружки (рядом с сердечками)
+  const megaR = 12 * heartScale;
+  const megaX = W/2 + 62;
   for(let i=0;i<3;i++){
-    const mx = W - 76 + i*22, my = hudY + hudGap - 12, on = i < game.megaLives;
-    ctx.fillStyle = on ? "#e8b30b" : "#2a2a2a";
-    const ss = PORTRAIT ? 1.6 : 1;
-    ctx.save();
-    ctx.translate(mx+6, my+7); ctx.scale(ss, ss);
+    const cx = megaX + i*(megaR*2+8), cy = heartY + megaR;
+    const on = i < game.megaLives;
     ctx.beginPath();
-    ctx.moveTo(0, -7); ctx.lineTo(2, -2); ctx.lineTo(7, -2);
-    ctx.lineTo(3, 1); ctx.lineTo(5, 7); ctx.lineTo(0, 3);
-    ctx.lineTo(-5, 7); ctx.lineTo(-3, 1); ctx.lineTo(-7, -2);
-    ctx.lineTo(-2, -2); ctx.closePath(); ctx.fill();
-    ctx.restore();
+    ctx.arc(cx, cy, megaR, 0, 7);
+    if(on){
+      ctx.fillStyle = "#22c55e"; ctx.fill();
+      ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2.5; ctx.stroke();
+    }else{
+      ctx.strokeStyle = "#22c55e"; ctx.lineWidth = 2.5; ctx.stroke();
+    }
   }
   ctx.textAlign = "center";
   // подсказка на первом уровне
